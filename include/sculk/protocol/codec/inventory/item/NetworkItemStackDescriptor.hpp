@@ -12,13 +12,27 @@
 
 namespace sculk::protocol::inline abi_v975 {
 
+struct ItemStackNetId {
+    int mId{};
+};
+
+struct ItemStackRequestId {
+    int mId{};
+};
+
+struct ItemStackLegacyRequestId {
+    int mId{};
+};
+
 struct NetworkItemStackDescriptor {
-    short              mId{};
-    std::uint16_t      mStackSize{};
-    std::uint32_t      mAux{};
-    std::optional<int> mNetId{};
-    std::uint32_t      mBlockRuntimeId{};
-    std::string        mUserData{};
+    using NetIdVariant = std::variant<ItemStackNetId, ItemStackRequestId, ItemStackLegacyRequestId>;
+
+    short                       mId{};
+    std::uint16_t               mStackSize{};
+    std::uint32_t               mAux{};
+    std::optional<NetIdVariant> mNetId{};
+    std::uint32_t               mBlockRuntimeId{};
+    std::string                 mUserData{};
 
     void write(BinaryStream& stream) const;
 

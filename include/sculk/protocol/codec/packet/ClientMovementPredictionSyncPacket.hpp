@@ -25,9 +25,9 @@ public:
         float mUnknown2{};
         float mUnknown3{};
 
-        void write(BinaryStream& stream) const override;
+        void write(BinaryStream& stream) const;
 
-        [[nodiscard]] Result<> read(ReadOnlyBinaryStream& stream) override;
+        [[nodiscard]] Result<> read(ReadOnlyBinaryStream& stream);
     };
 
 public:

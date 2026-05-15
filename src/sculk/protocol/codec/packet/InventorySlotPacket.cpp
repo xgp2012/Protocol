@@ -16,16 +16,16 @@ std::string_view InventorySlotPacket::getName() const noexcept { return "Invento
 void InventorySlotPacket::write(BinaryStream& stream) const {
     stream.writeByte(mInventoryId);
     stream.writeUnsignedVarInt(mSlot);
-    mFullContainerName.write(stream);
-    mStorageItem.writeCereal(stream);
+    stream.writeOptional(mFullContainerName, &FullContainerName::write);
+    stream.writeOptional(mStorageItem, &NetworkItemStackDescriptor::writeCereal);
     mItem.writeCereal(stream);
 }
 
 Result<> InventorySlotPacket::read(ReadOnlyBinaryStream& stream) {
     _SCULK_READ(stream.readByte(mInventoryId));
     _SCULK_READ(stream.readUnsignedVarInt(mSlot));
-    _SCULK_READ(mFullContainerName.read(stream));
-    _SCULK_READ(mStorageItem.readCereal(stream));
+    _SCULK_READ(stream.readOptional(mFullContainerName, &FullContainerName::read));
+    _SCULK_READ(stream.readOptional(mStorageItem, &NetworkItemStackDescriptor::readCereal));
     return mItem.readCereal(stream);
 }
 

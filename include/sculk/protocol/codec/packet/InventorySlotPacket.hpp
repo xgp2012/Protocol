@@ -14,11 +14,11 @@ namespace sculk::protocol::inline abi_v975 {
 
 class InventorySlotPacket : public IPacket {
 public:
-    std::uint8_t               mInventoryId{};
-    std::uint32_t              mSlot{};
-    FullContainerName          mFullContainerName{};
-    NetworkItemStackDescriptor mStorageItem{};
-    NetworkItemStackDescriptor mItem{};
+    std::uint8_t                              mInventoryId{};
+    std::uint32_t                             mSlot{};
+    std::optional<FullContainerName>          mFullContainerName{};
+    std::optional<NetworkItemStackDescriptor> mStorageItem{};
+    NetworkItemStackDescriptor                mItem{};
 
 public:
     [[nodiscard]] MinecraftPacketIds getId() const noexcept override;

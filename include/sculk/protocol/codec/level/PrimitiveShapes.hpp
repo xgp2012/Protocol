@@ -67,7 +67,7 @@ struct PrimitiveShapes {
     std::optional<float>               mTotalTimeLeft{};
     std::optional<float>               mMaxRenderDistance{};
     std::optional<std::int32_t>        mColor{};
-    std::optional<std::uint64_t>       mAttachedToEntityId{};
+    std::optional<std::int64_t>        mAttachedToEntityId{};
     PrimitiveShapesVariant             mShape{};
 
     void write(BinaryStream& stream) const;
