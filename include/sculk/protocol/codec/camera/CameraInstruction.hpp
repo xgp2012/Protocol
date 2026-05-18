@@ -60,7 +60,7 @@ struct CameraInstruction {
         std::optional<Vec2>       mViewOffset{};
         std::optional<Vec3>       mEntityOffset{};
         std::optional<bool>       mDefault{};
-        bool                      mRemoveIgnoreStartingValuesComponent{false};
+        bool                      mRemoveIgnoreStartingValuesComponent{};
 
         void write(BinaryStream& stream) const;
 
@@ -118,8 +118,8 @@ struct CameraInstruction {
         std::vector<Vec3>                 mCurve{};
         std::vector<SplineProgressOption> mProgressKeyFrames{};
         std::vector<RotationOption>       mRotationOptions{};
-        std::optional<std::string>        mSplineIdentifier{};
-        std::optional<bool>               mLoadFromJson{};
+        std::string                       mSplineIdentifier{};
+        bool                              mLoadFromJson{};
 
         void write(BinaryStream& stream) const;
 
@@ -141,7 +141,7 @@ struct CameraInstruction {
     std::optional<bool>                      mRemoveTarget{};
     std::optional<FovInstruction>            mFieldOfView{};
     std::optional<SplineInstruction>         mSpline{};
-    std::optional<AttachToEntityInstruction> mAttach{};
+    std::optional<AttachToEntityInstruction> mAttachToEntity{};
     std::optional<bool>                      mDetachFromEntity{};
 
     void write(BinaryStream& stream) const;

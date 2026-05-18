@@ -132,8 +132,8 @@ void CameraInstruction::SplineInstruction::write(BinaryStream& stream) const {
     stream.writeArray(mCurve, &Vec3::write);
     stream.writeArray(mProgressKeyFrames, &SplineProgressOption::write);
     stream.writeArray(mRotationOptions, &RotationOption::write);
-    stream.writeOptional(mSplineIdentifier, &BinaryStream::writeString);
-    stream.writeOptional(mLoadFromJson, &BinaryStream::writeBool);
+    stream.writeString(mSplineIdentifier);
+    stream.writeBool(mLoadFromJson);
 }
 
 Result<> CameraInstruction::SplineInstruction::read(ReadOnlyBinaryStream& stream) {
@@ -142,8 +142,8 @@ Result<> CameraInstruction::SplineInstruction::read(ReadOnlyBinaryStream& stream
     _SCULK_READ(stream.readArray(mCurve, &Vec3::read));
     _SCULK_READ(stream.readArray(mProgressKeyFrames, &SplineProgressOption::read));
     _SCULK_READ(stream.readArray(mRotationOptions, &RotationOption::read));
-    _SCULK_READ(stream.readOptional(mSplineIdentifier, &ReadOnlyBinaryStream::readString));
-    return stream.readOptional(mLoadFromJson, &ReadOnlyBinaryStream::readBool);
+    _SCULK_READ(stream.readString(mSplineIdentifier));
+    return stream.readBool(mLoadFromJson);
 }
 
 void CameraInstruction::AttachToEntityInstruction::write(BinaryStream& stream) const {
@@ -162,7 +162,7 @@ void CameraInstruction::write(BinaryStream& stream) const {
     stream.writeOptional(mRemoveTarget, &BinaryStream::writeBool);
     stream.writeOptional(mFieldOfView, &FovInstruction::write);
     stream.writeOptional(mSpline, &SplineInstruction::write);
-    stream.writeOptional(mAttach, &AttachToEntityInstruction::write);
+    stream.writeOptional(mAttachToEntity, &AttachToEntityInstruction::write);
     stream.writeOptional(mDetachFromEntity, &BinaryStream::writeBool);
 }
 
@@ -174,7 +174,7 @@ Result<> CameraInstruction::read(ReadOnlyBinaryStream& stream) {
     _SCULK_READ(stream.readOptional(mRemoveTarget, &ReadOnlyBinaryStream::readBool));
     _SCULK_READ(stream.readOptional(mFieldOfView, &FovInstruction::read));
     _SCULK_READ(stream.readOptional(mSpline, &SplineInstruction::read));
-    _SCULK_READ(stream.readOptional(mAttach, &AttachToEntityInstruction::read));
+    _SCULK_READ(stream.readOptional(mAttachToEntity, &AttachToEntityInstruction::read));
     return stream.readOptional(mDetachFromEntity, &ReadOnlyBinaryStream::readBool);
 }
 
