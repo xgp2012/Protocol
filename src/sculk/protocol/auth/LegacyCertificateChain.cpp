@@ -278,6 +278,20 @@ Result<> LegacyCertificateChain::sign(const AuthenticationKeyManager& publicKeyM
     return error_utils::makeError("Unsupported authentication type for signing");
 }
 
+#ifdef SCULK_PROTOCOL_ENABLE_DETAIL_ERRORS
+#define SCULK_CERTIFICATE_PARSE(PART, INDEX)                                                                           \
+    if (!certJson["chain"][INDEX].is_string()) {                                                                       \
+        return error_utils::makeError("Certificate JSON 'chain' field must be an array of strings");                   \
+    }                                                                                                                  \
+    auto PART##CertStr = certJson["chain"][INDEX].get<std::string>();                                                  \
+    auto PART##CertOpt = Certificate::fromString(PART##CertStr);                                                       \
+    if (!PART##CertOpt) {                                                                                              \
+        return error_utils::makeError(                                                                                 \
+            std::format("Failed to parse {} certificate: {}", #PART, PART##CertOpt.error().mMessage)                   \
+        );                                                                                                             \
+    }                                                                                                                  \
+    auto PART##Cert = *PART##CertOpt;
+#else
 #define SCULK_CERTIFICATE_PARSE(PART, INDEX)                                                                           \
     if (!certJson["chain"][INDEX].is_string()) {                                                                       \
         return error_utils::makeError("Certificate JSON 'chain' field must be an array of strings");                   \
@@ -288,6 +302,7 @@ Result<> LegacyCertificateChain::sign(const AuthenticationKeyManager& publicKeyM
         return error_utils::makeError("Failed to parse " #PART " certificate");                                        \
     }                                                                                                                  \
     auto PART##Cert = *PART##CertOpt;
+#endif
 
 #define SCULK_CERTIFICATE_CHECK_HEADER(PART, FIELD)                                                                    \
     if (!PART##Cert.mHeader.FIELD.has_value()) {                                                                       \

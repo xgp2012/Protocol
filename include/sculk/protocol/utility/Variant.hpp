@@ -20,7 +20,14 @@ Result<> emplace_variant_impl(Var& v, std::size_t idx _SCULK_SL_PARAMETER_DEF, s
     constexpr emplace_func table[] = {+[](Var& var) { var.template emplace<Is>(); }...};
 
     if (idx >= sizeof...(Is)) {
-        return error_utils::makeError("emplace_variant_impl: index out of range" _SCULK_SL_PARAM_PASS);
+#ifdef SCULK_PROTOCOL_ENABLE_DETAIL_ERRORS
+        return error_utils::makeError(
+            std::format("emplace_variant_impl: index {} out of range, max index is {}", idx, sizeof...(Is) - 1),
+            location
+        );
+#else
+        return error_utils::makeError("emplace_variant_impl: index out of range");
+#endif
     }
 
     table[idx](v);

@@ -44,7 +44,7 @@ struct ErrorInfo {
 
     [[nodiscard]] std::string message() const {
         return std::format(
-            "{} ({}:{}:{}:{})",
+            "{}\nat file: {} line {} column {}\nin function: {}",
             mMessage,
             mLocation.file_name(),
             mLocation.line(),
