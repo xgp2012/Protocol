@@ -6,6 +6,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #pragma once
+#include "AuthenticationKeyManager.hpp"
 #include "AuthenticationType.hpp"
 #include "ClientProperties.hpp"
 #include "LegacyCertificateChain.hpp"
@@ -24,7 +25,7 @@ public:
     ClientProperties                      mClientProperties{};
 
 public:
-    [[nodiscard]] bool verify() const noexcept;
+    [[nodiscard]] Result<> verify(const AuthenticationKeyManager& publicKeyManager) const;
 
     [[nodiscard]] std::string toString() const;
 

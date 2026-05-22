@@ -136,10 +136,13 @@ std::string LegacyCertificateChain::toString() const {
     return certChainJson.dump();
 }
 
-Result<> LegacyCertificateChain::verify(std::string_view publicKeyPem, std::chrono::seconds leeway) const {
+Result<> LegacyCertificateChain::verify(const AuthenticationKeyManager& authenticationKeyManager) const {
     const bool hasClient = mClientCertificate.has_value();
     const bool hasMojang = mMojangCertificate.has_value();
-    auto       now       = std::chrono::system_clock::now();
+
+    auto now          = std::chrono::system_clock::now();
+    auto leeway       = authenticationKeyManager.getValidityLeeway();
+    auto publicKeyPem = authenticationKeyManager.getLegacyCertificateChainPublicKeyPem();
 
     if (hasClient && hasMojang) {
         const auto& clientCert = *mClientCertificate;
@@ -209,10 +212,14 @@ Result<> LegacyCertificateChain::signFull(
 
     std::string publicKey1{};
     std::string privateKey1{};
+    if (!es384::generateES384KeyPair(publicKey1, privateKey1)) {
+        return error_utils::makeError("Failed to generate key pair for client certificate");
+    }
     std::string publicKey3{};
     std::string privateKey3{};
-    es384::generateES384KeyPair(publicKey1, privateKey1);
-    es384::generateES384KeyPair(publicKey3, privateKey3);
+    if (!es384::generateES384KeyPair(publicKey3, privateKey3)) {
+        return error_utils::makeError("Failed to generate key pair for login certificate");
+    }
 
     mClientCertificate->mHeader.x5u                = publicKey1;
     mClientCertificate->mPayload.identityPublicKey = publicKey3;
@@ -250,6 +257,25 @@ Result<> LegacyCertificateChain::signSelfSigned(
     }
 
     return {};
+}
+
+Result<> LegacyCertificateChain::sign(const AuthenticationKeyManager& publicKeyManager) {
+    auto now      = publicKeyManager.getCurrentTime();
+    auto authType = publicKeyManager.getAuthenticationType();
+    if (authType == AuthenticationType::Full) {
+        return signFull(
+            publicKeyManager.getLegacyCertificateChainPrivateKeyPem(),
+            publicKeyManager.getLegacyCertificateChainPublicKeyPem(),
+            now
+        );
+    } else if (authType == AuthenticationType::SelfSigned) {
+        return signSelfSigned(
+            publicKeyManager.getLegacyCertificateChainPrivateKeyPem(),
+            publicKeyManager.getLegacyCertificateChainPublicKeyPem(),
+            now
+        );
+    }
+    return error_utils::makeError("Unsupported authentication type for signing");
 }
 
 #define SCULK_CERTIFICATE_PARSE(PART, INDEX)                                                                           \

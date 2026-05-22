@@ -78,6 +78,28 @@ else()
     endif()
 endif()
 
+if(NOT PROTOCOL_DISABLE_AUTHENTICATION)
+    set(HTTPLIB_INSTALL OFF CACHE BOOL "Disable cpp-httplib install targets" FORCE)
+    set(HTTPLIB_COMPILE OFF CACHE BOOL "Use cpp-httplib header-only mode" FORCE)
+    set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "Disable optional OpenSSL for cpp-httplib" FORCE)
+    set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "Do not require OpenSSL in cpp-httplib" FORCE)
+    set(HTTPLIB_USE_ZLIB_IF_AVAILABLE OFF CACHE BOOL "Disable optional zlib for cpp-httplib" FORCE)
+    set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF CACHE BOOL "Disable optional brotli for cpp-httplib" FORCE)
+
+    FetchContent_Declare(
+        cpp_httplib
+        GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+        GIT_TAG master
+    )
+    FetchContent_MakeAvailable(cpp_httplib)
+
+    if(TARGET httplib::httplib)
+        target_link_libraries(Protocol PRIVATE $<BUILD_INTERFACE:httplib::httplib>)
+    else()
+        target_include_directories(Protocol PRIVATE $<BUILD_INTERFACE:${cpp_httplib_SOURCE_DIR}>)
+    endif()
+endif()
+
 if(PROTOCOL_SOURCES)
     target_sources(Protocol PRIVATE ${PROTOCOL_SOURCES})
 endif()

@@ -27,9 +27,17 @@ struct serializer<sculk::protocol::AuthenticationType> {
 
 namespace sculk::protocol::inline abi_v975 {
 
-bool ConnectionRequest::verify() const noexcept {
-    // TODO: Implement actual verification logic
-    return true;
+Result<> ConnectionRequest::verify(const AuthenticationKeyManager& authenticationKeyManager) const {
+    if (mLoginToken) {
+        // TODO: Implement login token verification logic
+        return {};
+    }
+
+    if (mLegacyCertificateChain) {
+        return mLegacyCertificateChain->verify(authenticationKeyManager);
+    }
+
+    return error_utils::makeError("ConnectionRequest must have either a login token or a legacy certificate chain");
 }
 
 std::string ConnectionRequest::toString() const {
@@ -107,7 +115,7 @@ Result<ConnectionRequest> ConnectionRequest::create(
     std::string&&                clientPropertiesString
 ) {
     std::optional<LegacyCertificateChain> legacyCertificateChain{};
-    if (legacyCertificateChainString) {
+    if (legacyCertificateChainString && *legacyCertificateChainString != "{\"chain\":[\"..\"]}\n") {
         auto certChain = LegacyCertificateChain::fromString(*legacyCertificateChainString);
         if (!certChain) {
             return error_utils::makeError("Failed to parse legacy certificate chain");

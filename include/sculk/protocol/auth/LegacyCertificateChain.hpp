@@ -6,6 +6,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #pragma once
+#include "AuthenticationKeyManager.hpp"
 #include "sculk/protocol/utility/Result.hpp"
 #include <chrono>
 #include <format>
@@ -100,7 +101,7 @@ public:
                                   : mLoginCertificate.mPayload.identityPublicKey;
     }
 
-    [[nodiscard]] Result<> verify(std::string_view publicKeyPem, std::chrono::seconds leeway) const;
+    [[nodiscard]] Result<> verify(const AuthenticationKeyManager& authenticationKeyManager) const;
 
     [[nodiscard]] Result<>
     signFull(std::string_view privateKeyPem, std::string_view publicKeyPem, std::chrono::system_clock::time_point now);
@@ -110,6 +111,8 @@ public:
         std::string_view                      publicKeyPem,
         std::chrono::system_clock::time_point now
     );
+
+    [[nodiscard]] Result<> sign(const AuthenticationKeyManager& authenticationKeyManager);
 
     [[nodiscard]] std::string toString() const;
 
