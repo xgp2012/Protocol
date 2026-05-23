@@ -21,9 +21,10 @@ namespace sculk::protocol::inline abi_v975::rs256 {
 
 constexpr std::size_t MinRsaBits = 2048;
 
-using BioPtr   = std::unique_ptr<BIO, decltype(&BIO_free)>;
-using PkeyPtr  = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
-using MdCtxPtr = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+using BioPtr     = std::unique_ptr<BIO, decltype(&BIO_free)>;
+using PkeyPtr    = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
+using MdCtxPtr   = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+using PkeyCtxPtr = std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)>;
 
 [[nodiscard]] inline std::string_view trimPemContent(std::string_view pem) {
     constexpr std::string_view whitespace = " \t\r\n";
@@ -66,6 +67,58 @@ using MdCtxPtr = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 }
 
 [[nodiscard]] inline MdCtxPtr makeMdCtx() { return MdCtxPtr(EVP_MD_CTX_new(), EVP_MD_CTX_free); }
+
+[[nodiscard]] inline bool generateRS256KeyPair(std::string& outPublicKeyPem, std::string& outPrivateKeyPem) {
+    outPublicKeyPem.clear();
+    outPrivateKeyPem.clear();
+
+    PkeyCtxPtr pkeyCtx(EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr), EVP_PKEY_CTX_free);
+    if (!pkeyCtx) {
+        return false;
+    }
+
+    if (EVP_PKEY_keygen_init(pkeyCtx.get()) != 1) {
+        return false;
+    }
+    if (EVP_PKEY_CTX_set_rsa_keygen_bits(pkeyCtx.get(), static_cast<int>(MinRsaBits)) != 1) {
+        return false;
+    }
+
+    EVP_PKEY* rawKey = nullptr;
+    if (EVP_PKEY_keygen(pkeyCtx.get(), &rawKey) != 1) {
+        return false;
+    }
+
+    PkeyPtr key(rawKey, EVP_PKEY_free);
+    if (!isRs256Key(key.get())) {
+        return false;
+    }
+
+    BioPtr publicBio(BIO_new(BIO_s_mem()), BIO_free);
+    BioPtr privateBio(BIO_new(BIO_s_mem()), BIO_free);
+    if (!publicBio || !privateBio) {
+        return false;
+    }
+
+    if (PEM_write_bio_PUBKEY(publicBio.get(), key.get()) != 1) {
+        return false;
+    }
+    if (PEM_write_bio_PrivateKey(privateBio.get(), key.get(), nullptr, nullptr, 0, nullptr, nullptr) != 1) {
+        return false;
+    }
+
+    char* publicData  = nullptr;
+    long  publicLen   = BIO_get_mem_data(publicBio.get(), &publicData);
+    char* privateData = nullptr;
+    long  privateLen  = BIO_get_mem_data(privateBio.get(), &privateData);
+    if (publicLen <= 0 || privateLen <= 0 || !publicData || !privateData) {
+        return false;
+    }
+
+    outPublicKeyPem.assign(publicData, static_cast<std::size_t>(publicLen));
+    outPrivateKeyPem.assign(privateData, static_cast<std::size_t>(privateLen));
+    return true;
+}
 
 [[nodiscard]] inline PkeyPtr loadPublicKey(std::string_view pem) {
     std::string      ownedPem{};

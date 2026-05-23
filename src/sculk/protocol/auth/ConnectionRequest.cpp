@@ -34,10 +34,36 @@ Result<> ConnectionRequest::verify(const AuthenticationKeyManager& authenticatio
     }
 
     if (mLegacyCertificateChain) {
-        return mLegacyCertificateChain->verify(authenticationKeyManager);
+        if (!mLegacyCertificateChain->verify(authenticationKeyManager)) {
+            return error_utils::makeError("Legacy certificate chain verification failed");
+        }
+        return mClientProperties.verify(mLegacyCertificateChain->getClientPublicKey());
     }
 
     return error_utils::makeError("ConnectionRequest must have either a login token or a legacy certificate chain");
+}
+
+Result<> ConnectionRequest::sign(const AuthenticationKeyManager& authenticationKeyManager) {
+    bool success{false};
+
+    if (mLoginToken) {
+        // TODO: Implement login token signing logic
+    }
+
+    if (mLegacyCertificateChain
+        && authenticationKeyManager.legacyCertificateChainSigningInitialized(mAuthenticationType)) {
+        if (mLegacyCertificateChain->sign(authenticationKeyManager)) {
+            success = true;
+        }
+    }
+
+    if (success) {
+        return {};
+    }
+
+    return error_utils::makeError(
+        "ConnectionRequest must have either a login token or a legacy certificate chain to sign"
+    );
 }
 
 std::string ConnectionRequest::toString() const {
@@ -52,7 +78,7 @@ std::string ConnectionRequest::toString() const {
         authJson["Certificate"] = mLegacyCertificateChain->toString();
     }
 
-    stream.writeLongString(authJson.dump());
+    stream.writeLongString(authJson.dump(-1));
     stream.writeLongString(mClientProperties.toString());
 
     std::string result{};

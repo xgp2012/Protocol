@@ -85,15 +85,11 @@ public:
     Certificate                mLoginCertificate{};
 
 public:
-    [[nodiscard]] std::string getIdentity() const { return mLoginCertificate.mPayload.extraData->identity; }
+    [[nodiscard]] std::string_view getIdentity() const { return mLoginCertificate.mPayload.extraData->identity; }
 
-    [[nodiscard]] std::string getDisplayName() const { return mLoginCertificate.mPayload.extraData->displayName; }
+    [[nodiscard]] std::string_view getDisplayName() const { return mLoginCertificate.mPayload.extraData->displayName; }
 
-    [[nodiscard]] std::string getXUID() const { return mLoginCertificate.mPayload.extraData->XUID; }
-
-    [[nodiscard]] std::string getTitleId() const { return mLoginCertificate.mPayload.extraData->titleId; }
-
-    [[nodiscard]] std::string getSandBoxId() const { return mLoginCertificate.mPayload.extraData->sandBoxId; }
+    [[nodiscard]] std::string_view getXUID() const { return mLoginCertificate.mPayload.extraData->XUID; }
 
 public:
     [[nodiscard]] std::string getClientPublicKey() const {
@@ -104,13 +100,10 @@ public:
     [[nodiscard]] Result<> verify(const AuthenticationKeyManager& authenticationKeyManager) const;
 
     [[nodiscard]] Result<>
-    signFull(std::string_view privateKeyPem, std::string_view publicKeyPem, std::chrono::system_clock::time_point now);
+    signFull(const AuthenticationKeyManager& authenticationKeyManager, std::chrono::system_clock::time_point now);
 
-    [[nodiscard]] Result<> signSelfSigned(
-        std::string_view                      privateKeyPem,
-        std::string_view                      publicKeyPem,
-        std::chrono::system_clock::time_point now
-    );
+    [[nodiscard]] Result<>
+    signSelfSigned(const AuthenticationKeyManager& authenticationKeyManager, std::chrono::system_clock::time_point now);
 
     [[nodiscard]] Result<> sign(const AuthenticationKeyManager& authenticationKeyManager);
 

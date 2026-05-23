@@ -9,19 +9,31 @@
 #include "AuthenticationType.hpp"
 #include "sculk/protocol/utility/Result.hpp"
 #include <chrono>
+#include <future>
 #include <optional>
 #include <string>
 
 namespace sculk::protocol::inline abi_v975 {
 
 class AuthenticationKeyManager {
+public:
+    struct KeyPair {
+        std::string mPublicKeyPem{};
+        std::string mPrivateKeyPem{};
+    };
+
+private:
     AuthenticationType                                   mAuthenticationType{};
     std::string                                          mLegacyCertificateChainPublicKeyPem{};
-    std::string                                          mLegacyCertificateChainPrivateKeyPem{};
+    std::optional<KeyPair>                               mLegacyCertificateClientKeyPair{};
+    std::optional<KeyPair>                               mLegacyCertificateMojangKeyPair{};
+    std::optional<KeyPair>                               mLegacyCertificateLoginKeyPair{};
     std::chrono::seconds                                 mValidityLeeway{60};
     std::optional<std::chrono::system_clock::time_point> mValidityTime{};
 
 public:
+    AuthenticationKeyManager() = default;
+
     [[nodiscard]] constexpr AuthenticationType getAuthenticationType() const { return mAuthenticationType; }
 
     [[nodiscard]] constexpr std::chrono::seconds getValidityLeeway() const { return mValidityLeeway; }
@@ -34,8 +46,70 @@ public:
         return mLegacyCertificateChainPublicKeyPem;
     }
 
-    [[nodiscard]] constexpr std::string_view getLegacyCertificateChainPrivateKeyPem() const {
-        return mLegacyCertificateChainPrivateKeyPem;
+public:
+    [[nodiscard]] Result<KeyPair> generateRandomES384KeyPair() const;
+
+    [[nodiscard]] Result<KeyPair> generateRandomRS256KeyPair() const;
+
+public:
+    [[nodiscard]] bool legacyCertificateChainSigningInitialized(AuthenticationType authType) const {
+        if (authType == AuthenticationType::Full) {
+            return mLegacyCertificateClientKeyPair.has_value() && mLegacyCertificateMojangKeyPair.has_value()
+                && mLegacyCertificateLoginKeyPair.has_value();
+        } else if (authType == AuthenticationType::SelfSigned) {
+            return mLegacyCertificateLoginKeyPair.has_value();
+        }
+        return false;
+    }
+
+    [[nodiscard]] Result<> generateAndSetLegacyFullCertificateChainKeyPairs();
+
+    [[nodiscard]] Result<> generateAndSetLegacySelfSignedCertificateChainKeyPairs();
+
+    constexpr void
+    setLegacyCertificateChainClientKeyPair(std::string_view publicKeyPem, std::string_view privateKeyPem) {
+        mLegacyCertificateClientKeyPair = KeyPair{std::string(publicKeyPem), std::string(privateKeyPem)};
+    }
+
+    constexpr void
+    setLegacyCertificateChainMojangKeyPair(std::string_view publicKeyPem, std::string_view privateKeyPem) {
+        mLegacyCertificateMojangKeyPair = KeyPair{std::string(publicKeyPem), std::string(privateKeyPem)};
+    }
+
+    constexpr void
+    setLegacyCertificateChainLoginKeyPair(std::string_view publicKeyPem, std::string_view privateKeyPem) {
+        mLegacyCertificateLoginKeyPair = KeyPair{std::string(publicKeyPem), std::string(privateKeyPem)};
+    }
+
+    [[nodiscard]] Result<KeyPair> getLegacyCertificateChainClientKeyPair() const {
+        if (mLegacyCertificateClientKeyPair) {
+            return *mLegacyCertificateClientKeyPair;
+        }
+        return error_utils::makeError("Client key pair not set");
+    }
+
+    [[nodiscard]] Result<KeyPair> getLegacyCertificateChainMojangKeyPair() const {
+        if (mLegacyCertificateMojangKeyPair) {
+            return *mLegacyCertificateMojangKeyPair;
+        }
+        return error_utils::makeError("Mojang key pair not set");
+    }
+
+    [[nodiscard]] Result<KeyPair> getLegacyCertificateChainLoginKeyPair() const {
+        if (mLegacyCertificateLoginKeyPair) {
+            return *mLegacyCertificateLoginKeyPair;
+        }
+        return error_utils::makeError("Login key pair not set");
+    }
+
+public:
+    [[nodiscard]] Result<KeyPair> getClientPropertiesKeyPair() const {
+        if (mAuthenticationType == AuthenticationType::Full) {
+            return getLegacyCertificateChainClientKeyPair();
+        } else if (mAuthenticationType == AuthenticationType::SelfSigned) {
+            return getLegacyCertificateChainLoginKeyPair();
+        }
+        return error_utils::makeError("Unsupported authentication type for getting client properties key pair");
     }
 
 public:
@@ -45,13 +119,11 @@ public:
 
     constexpr void setValidityTime(std::chrono::system_clock::time_point validityTime) { mValidityTime = validityTime; }
 
-    constexpr void
-    setLegacyCertificateChainPublicKeyPemPair(std::string_view publicKeyPem, std::string_view privateKeyPem) {
-        mLegacyCertificateChainPublicKeyPem  = publicKeyPem;
-        mLegacyCertificateChainPrivateKeyPem = privateKeyPem;
-    }
+    Result<> initMojangPublicKeyBlocking();
 
-    Result<> initMojangPublicKey();
+    std::future<Result<>> initMojangPublicKeyAsync() {
+        return std::async(std::launch::async, [this]() { return initMojangPublicKeyBlocking(); });
+    }
 };
 
 } // namespace sculk::protocol::inline abi_v975

@@ -68,7 +68,7 @@ bool Certificate::sign(std::string_view privateKeyPem, std::chrono::system_clock
     SCULK_CERTIFICATE_SERIALIZE(header, alg);
     SCULK_CERTIFICATE_SERIALIZE(header, x5u);
     SCULK_CERTIFICATE_SERIALIZE(header, x5t);
-    mRawHeader = base64url::encode(headerJson.dump());
+    mRawHeader = base64url::encode(headerJson.dump(-1));
 
     SCULK_CERTIFICATE_CREATE_JSON(payload, mPayload);
     SCULK_CERTIFICATE_SERIALIZE(payload, nbf);
@@ -79,7 +79,7 @@ bool Certificate::sign(std::string_view privateKeyPem, std::chrono::system_clock
     SCULK_CERTIFICATE_SERIALIZE(payload, iss);
     SCULK_CERTIFICATE_SERIALIZE(payload, iat);
     SCULK_CERTIFICATE_SERIALIZE(payload, extraData);
-    mRawPayload = base64url::encode(payloadJson.dump());
+    mRawPayload = base64url::encode(payloadJson.dump(-1));
 
     std::string signingInput = std::format("{}.{}", mRawHeader, mRawPayload);
     return es384::signES384Signature(signingInput, privateKeyPem, mSignature);
@@ -140,7 +140,7 @@ std::string LegacyCertificateChain::toString() const {
         certChainJson["chain"].push_back(mMojangCertificate->toString());
     }
     certChainJson["chain"].push_back(mLoginCertificate.toString());
-    return certChainJson.dump();
+    return certChainJson.dump(-1);
 }
 
 Result<> LegacyCertificateChain::verify(const AuthenticationKeyManager& authenticationKeyManager) const {
@@ -209,40 +209,41 @@ Result<> LegacyCertificateChain::verify(const AuthenticationKeyManager& authenti
 }
 
 Result<> LegacyCertificateChain::signFull(
-    std::string_view                      privateKeyPem,
-    std::string_view                      publicKeyPem,
+    const AuthenticationKeyManager&       authenticationKeyManager,
     std::chrono::system_clock::time_point now
 ) {
     if (!mClientCertificate.has_value() || !mMojangCertificate.has_value()) {
         return error_utils::makeError("Missing client or Mojang certificate");
     }
 
-    std::string publicKey1{};
-    std::string privateKey1{};
-    if (!es384::generateES384KeyPair(publicKey1, privateKey1)) {
-        return error_utils::makeError("Failed to generate key pair for client certificate");
+    auto keyPair1 = authenticationKeyManager.getLegacyCertificateChainClientKeyPair();
+    if (!keyPair1) {
+        return error_utils::makeError("Client key pair not set, set the client key pair before signing");
     }
-    std::string publicKey3{};
-    std::string privateKey3{};
-    if (!es384::generateES384KeyPair(publicKey3, privateKey3)) {
-        return error_utils::makeError("Failed to generate key pair for login certificate");
+    auto keyPair2 = authenticationKeyManager.getLegacyCertificateChainMojangKeyPair();
+    if (!keyPair2) {
+        return error_utils::makeError("Mojang key pair not set, set the Mojang key pair before signing");
+    }
+    auto keyPair3 = authenticationKeyManager.getLegacyCertificateChainLoginKeyPair();
+    if (!keyPair3) {
+        return error_utils::makeError("Login key pair not set, set the login key pair before signing");
     }
 
-    mClientCertificate->mHeader.x5u                = publicKey1;
-    mClientCertificate->mPayload.identityPublicKey = publicKey3;
-    if (!mClientCertificate->sign(privateKey1, now)) {
+    mClientCertificate->mHeader.x5u                = keyPair1->mPublicKeyPem;
+    mClientCertificate->mPayload.identityPublicKey = keyPair3->mPublicKeyPem;
+    if (!mClientCertificate->sign(keyPair1->mPrivateKeyPem, now)) {
         return error_utils::makeError("Failed to sign client certificate");
     }
 
-    mMojangCertificate->mHeader.x5u                = publicKeyPem;
-    mMojangCertificate->mPayload.identityPublicKey = publicKey1;
-    if (!mMojangCertificate->sign(privateKeyPem, now)) {
+    mMojangCertificate->mHeader.x5u                = keyPair2->mPublicKeyPem;
+    mMojangCertificate->mPayload.identityPublicKey = keyPair1->mPublicKeyPem;
+    if (!mMojangCertificate->sign(keyPair2->mPrivateKeyPem, now)) {
         return error_utils::makeError("Failed to sign Mojang certificate");
     }
 
-    mLoginCertificate.mHeader.x5u                = publicKey3;
-    mLoginCertificate.mPayload.identityPublicKey = publicKeyPem;
-    if (!mLoginCertificate.sign(privateKey3, now)) {
+    mLoginCertificate.mHeader.x5u                = keyPair3->mPublicKeyPem;
+    mLoginCertificate.mPayload.identityPublicKey = keyPair2->mPublicKeyPem;
+    if (!mLoginCertificate.sign(keyPair3->mPrivateKeyPem, now)) {
         return error_utils::makeError("Failed to sign login certificate");
     }
 
@@ -250,16 +251,20 @@ Result<> LegacyCertificateChain::signFull(
 }
 
 Result<> LegacyCertificateChain::signSelfSigned(
-    std::string_view                      privateKeyPem,
-    std::string_view                      publicKeyPem,
+    const AuthenticationKeyManager&       authenticationKeyManager,
     std::chrono::system_clock::time_point now
 ) {
     mClientCertificate.reset();
     mMojangCertificate.reset();
 
-    mLoginCertificate.mHeader.x5u                = publicKeyPem;
-    mLoginCertificate.mPayload.identityPublicKey = publicKeyPem;
-    if (!mLoginCertificate.sign(privateKeyPem, now)) {
+    auto keyPair = authenticationKeyManager.getLegacyCertificateChainLoginKeyPair();
+    if (!keyPair) {
+        return error_utils::makeError("Login key pair not set, set the login key pair before signing");
+    }
+
+    mLoginCertificate.mHeader.x5u                = keyPair->mPublicKeyPem;
+    mLoginCertificate.mPayload.identityPublicKey = keyPair->mPublicKeyPem;
+    if (!mLoginCertificate.sign(keyPair->mPrivateKeyPem, now)) {
         return error_utils::makeError("Failed to sign login certificate");
     }
 
@@ -270,17 +275,9 @@ Result<> LegacyCertificateChain::sign(const AuthenticationKeyManager& publicKeyM
     auto now      = publicKeyManager.getValidityTime();
     auto authType = publicKeyManager.getAuthenticationType();
     if (authType == AuthenticationType::Full) {
-        return signFull(
-            publicKeyManager.getLegacyCertificateChainPrivateKeyPem(),
-            publicKeyManager.getLegacyCertificateChainPublicKeyPem(),
-            now
-        );
+        return signFull(publicKeyManager, now);
     } else if (authType == AuthenticationType::SelfSigned) {
-        return signSelfSigned(
-            publicKeyManager.getLegacyCertificateChainPrivateKeyPem(),
-            publicKeyManager.getLegacyCertificateChainPublicKeyPem(),
-            now
-        );
+        return signSelfSigned(publicKeyManager, now);
     }
     return error_utils::makeError("Unsupported authentication type for signing");
 }

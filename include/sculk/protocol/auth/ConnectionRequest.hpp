@@ -27,6 +27,8 @@ public:
 public:
     [[nodiscard]] Result<> verify(const AuthenticationKeyManager& publicKeyManager) const;
 
+    [[nodiscard]] Result<> sign(const AuthenticationKeyManager& authenticationKeyManager);
+
     [[nodiscard]] std::string toString() const;
 
 public:
