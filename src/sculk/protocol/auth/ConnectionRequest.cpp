@@ -52,7 +52,7 @@ Result<> ConnectionRequest::sign(const AuthenticationKeyManager& authenticationK
         );
     }
 
-    if (mLoginToken) { // TODO: check if login token signing is supported with the given authentication type
+    if (mLoginToken && authenticationKeyManager.loginTokenSigningInitialized(mAuthenticationType)) {
         if (!mLoginToken->sign(authenticationKeyManager)) {
             return error_utils::makeError("Login token signing failed");
         }

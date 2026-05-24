@@ -27,6 +27,7 @@ private:
     AuthenticationType                                   mAuthenticationType{};
     std::unordered_map<std::string, std::string>         mLoginTokenPublicKeysPemByKeyId{};
     std::optional<std::pair<std::string, KeyPair>>       mLoginTokenKeyPairsAndKeyId{};
+    std::string                                          mLoginTokenExpectedIssuer{};
     std::optional<KeyPair>                               mSelfSignedLoginTokenKeyPair{};
     std::vector<std::string>                             mLegacyCertificateChainPublicKeyPems{};
     std::optional<KeyPair>                               mLegacyCertificateClientKeyPair{};
@@ -58,6 +59,8 @@ public:
         }
         return {};
     }
+
+    [[nodiscard]] std::string_view getLoginTokenExpectedIssuer() const { return mLoginTokenExpectedIssuer; }
 
 public:
     [[nodiscard]] Result<KeyPair> generateRandomES384KeyPair() const;

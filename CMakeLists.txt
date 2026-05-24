@@ -13,21 +13,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(PROTOCOL_ENABLE_DETAIL_ERRORS "Enable detailed error information" OFF)
-option(PROTOCOL_DISABLE_CODEC "Disable codec features" OFF)
-option(PROTOCOL_DISABLE_AUTHENTICATION "Disable authentication features" OFF)
-option(PROTOCOL_DISABLE_CONNECTION "Disable connection features" ON)
+option(PROTOCOL_ENABLE_CODEC "Enable codec features" ON)
+option(PROTOCOL_ENABLE_AUTHENTICATION "Enable authentication features" ON)
+option(PROTOCOL_ENABLE_CONNECTION "Enable connection features" OFF)
+option(PROTOCOL_ENABLE_EXCEPTIONS "Enable C++ exceptions for Protocol target" OFF)
 
-if(NOT PROTOCOL_DISABLE_CONNECTION AND PROTOCOL_DISABLE_CODEC)
+if(PROTOCOL_ENABLE_CONNECTION AND NOT PROTOCOL_ENABLE_CODEC)
     message(FATAL_ERROR
         "Invalid configuration: CONNECTION requires CODEC. "
-        "Set PROTOCOL_DISABLE_CODEC=OFF or PROTOCOL_DISABLE_CONNECTION=ON."
+        "Set PROTOCOL_ENABLE_CODEC=ON or PROTOCOL_ENABLE_CONNECTION=OFF."
     )
 endif()
 
 set(PROTOCOL_SOURCES)
 set(PROTOCOL_INSTALL_INCLUDE_DIRS)
 
-if(NOT PROTOCOL_DISABLE_CODEC)
+if(PROTOCOL_ENABLE_CODEC)
     file(GLOB_RECURSE PROTOCOL_SOURCES_CODEC CONFIGURE_DEPENDS
         "${PROJECT_SOURCE_DIR}/src/sculk/protocol/codec/*.cpp"
     )
@@ -35,7 +36,7 @@ if(NOT PROTOCOL_DISABLE_CODEC)
     list(APPEND PROTOCOL_INSTALL_INCLUDE_DIRS "sculk/protocol/codec")
 endif()
 
-if(NOT PROTOCOL_DISABLE_AUTHENTICATION)
+if(PROTOCOL_ENABLE_AUTHENTICATION)
     file(GLOB_RECURSE PROTOCOL_SOURCES_AUTH CONFIGURE_DEPENDS
         "${PROJECT_SOURCE_DIR}/src/sculk/protocol/auth/*.cpp"
     )
@@ -43,7 +44,7 @@ if(NOT PROTOCOL_DISABLE_AUTHENTICATION)
     list(APPEND PROTOCOL_INSTALL_INCLUDE_DIRS "sculk/protocol/auth")
 endif()
 
-if(NOT PROTOCOL_DISABLE_CONNECTION)
+if(PROTOCOL_ENABLE_CONNECTION)
     file(GLOB_RECURSE PROTOCOL_SOURCES_CONNECTION CONFIGURE_DEPENDS
         "${PROJECT_SOURCE_DIR}/src/sculk/protocol/connection/*.cpp"
     )
@@ -54,7 +55,7 @@ endif()
 add_library(Protocol STATIC)
 add_library(Protocol::Protocol ALIAS Protocol)
 
-if(NOT PROTOCOL_DISABLE_AUTHENTICATION OR NOT PROTOCOL_DISABLE_CONNECTION)
+if(PROTOCOL_ENABLE_AUTHENTICATION OR PROTOCOL_ENABLE_CONNECTION)
     set(OPENSSL_USE_STATIC_LIBS ON)
     find_package(OpenSSL 3 REQUIRED)
     target_link_libraries(Protocol PRIVATE OpenSSL::Crypto)
@@ -67,7 +68,7 @@ if(NOT PROTOCOL_DISABLE_AUTHENTICATION OR NOT PROTOCOL_DISABLE_CONNECTION)
     FetchContent_MakeAvailable(reflection)
     target_link_libraries(Protocol PRIVATE $<BUILD_INTERFACE:reflection::reflection>)
 else()
-    if(NOT PROTOCOL_DISABLE_CODEC)
+    if(PROTOCOL_ENABLE_CODEC)
         FetchContent_Declare(
             magic_enum
             GIT_REPOSITORY https://github.com/Neargye/magic_enum.git
@@ -78,26 +79,31 @@ else()
     endif()
 endif()
 
-if(NOT PROTOCOL_DISABLE_AUTHENTICATION)
+if(PROTOCOL_ENABLE_AUTHENTICATION)
     set(HTTPLIB_INSTALL OFF CACHE BOOL "Disable cpp-httplib install targets" FORCE)
     set(HTTPLIB_COMPILE OFF CACHE BOOL "Use cpp-httplib header-only mode" FORCE)
-    set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "Disable optional OpenSSL for cpp-httplib" FORCE)
-    set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "Do not require OpenSSL in cpp-httplib" FORCE)
+    set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE ON CACHE BOOL "Enable OpenSSL for HTTPS in cpp-httplib" FORCE)
+    set(HTTPLIB_REQUIRE_OPENSSL ON CACHE BOOL "Require OpenSSL for cpp-httplib HTTPS" FORCE)
     set(HTTPLIB_USE_ZLIB_IF_AVAILABLE OFF CACHE BOOL "Disable optional zlib for cpp-httplib" FORCE)
     set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF CACHE BOOL "Disable optional brotli for cpp-httplib" FORCE)
 
     FetchContent_Declare(
         cpp_httplib
         GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-        GIT_TAG master
+        GIT_TAG v0.45.0
     )
     FetchContent_MakeAvailable(cpp_httplib)
 
     if(TARGET httplib::httplib)
-        target_link_libraries(Protocol PRIVATE $<BUILD_INTERFACE:httplib::httplib>)
+        target_link_libraries(Protocol PRIVATE $<BUILD_INTERFACE:httplib::httplib> OpenSSL::SSL)
     else()
         target_include_directories(Protocol PRIVATE $<BUILD_INTERFACE:${cpp_httplib_SOURCE_DIR}>)
     endif()
+
+    target_compile_definitions(Protocol PRIVATE
+        CPPHTTPLIB_OPENSSL_SUPPORT
+        CPPHTTPLIB_NO_EXCEPTIONS
+    )
 endif()
 
 if(PROTOCOL_SOURCES)
@@ -121,21 +127,28 @@ if(PROTOCOL_ENABLE_DETAIL_ERRORS)
 endif()
 
 if(MSVC)
+    if(NOT PROTOCOL_ENABLE_EXCEPTIONS)
+        string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+    endif()
+
     target_compile_options(Protocol PRIVATE
         /W4
         /utf-8
+        $<$<NOT:$<BOOL:${PROTOCOL_ENABLE_EXCEPTIONS}>>:/EHs-c->
         $<$<CONFIG:Release>:/O2>
         $<$<CONFIG:RelWithDebInfo>:/O2>
     )
     target_compile_definitions(Protocol PRIVATE
         UNICODE
         NOMINMAX
+        $<$<NOT:$<BOOL:${PROTOCOL_ENABLE_EXCEPTIONS}>>:_HAS_EXCEPTIONS=0>
     )
 else()
     target_compile_options(Protocol PRIVATE
         -Wall
         -Wextra
         -Wpedantic
+        $<$<NOT:$<BOOL:${PROTOCOL_ENABLE_EXCEPTIONS}>>:-fno-exceptions>
         $<$<CONFIG:Release>:-O3>
         $<$<CONFIG:RelWithDebInfo>:-O3>
     )

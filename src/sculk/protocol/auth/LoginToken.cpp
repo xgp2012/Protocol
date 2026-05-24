@@ -103,7 +103,7 @@ Result<> LoginToken::verify(const AuthenticationKeyManager& authenticationKeyMan
             return error_utils::makeError("Login token 'iat' claim is in the future");
         }
 
-        if (*mPayload.iss != "https://authorization.franchise.minecraft-services.net/") {
+        if (*mPayload.iss != authenticationKeyManager.getLoginTokenExpectedIssuer()) {
             return error_utils::makeError("Login token 'iss' claim is invalid");
         }
 

@@ -10,11 +10,14 @@
 #include <cstdint>
 #include <memory>
 #include <openssl/bio.h>
+#include <openssl/core_names.h>
 #include <openssl/evp.h>
+#include <openssl/param_build.h>
+#include <openssl/params.h>
 #include <openssl/pem.h>
-#include <openssl/rsa.h>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sculk::protocol::inline abi_v975::rs256 {
@@ -25,6 +28,18 @@ using BioPtr     = std::unique_ptr<BIO, decltype(&BIO_free)>;
 using PkeyPtr    = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
 using MdCtxPtr   = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 using PkeyCtxPtr = std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)>;
+using BignumPtr  = std::unique_ptr<BIGNUM, decltype(&BN_free)>;
+
+struct OsslParamBldDeleter {
+    void operator()(OSSL_PARAM_BLD* value) const noexcept { OSSL_PARAM_BLD_free(value); }
+};
+
+struct OsslParamDeleter {
+    void operator()(OSSL_PARAM* value) const noexcept { OSSL_PARAM_free(value); }
+};
+
+using ParamBldPtr = std::unique_ptr<OSSL_PARAM_BLD, OsslParamBldDeleter>;
+using ParamPtr    = std::unique_ptr<OSSL_PARAM, OsslParamDeleter>;
 
 [[nodiscard]] inline std::string_view trimPemContent(std::string_view pem) {
     constexpr std::string_view whitespace = " \t\r\n";
@@ -67,6 +82,97 @@ using PkeyCtxPtr = std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)>;
 }
 
 [[nodiscard]] inline MdCtxPtr makeMdCtx() { return MdCtxPtr(EVP_MD_CTX_new(), EVP_MD_CTX_free); }
+
+[[nodiscard]] inline bool
+jwkRsaPublicKeyToPem(std::string_view modulusEncoded, std::string_view exponentEncoded, std::string& outPublicKeyPem) {
+    outPublicKeyPem.clear();
+
+    auto modulusDecoded = base64url::decodeChecked(modulusEncoded);
+    if (!modulusDecoded) {
+        return false;
+    }
+
+    auto exponentDecoded = base64url::decodeChecked(exponentEncoded);
+    if (!exponentDecoded) {
+        return false;
+    }
+
+    BignumPtr modulus(
+        BN_bin2bn(
+            reinterpret_cast<const unsigned char*>(modulusDecoded->data()),
+            static_cast<int>(modulusDecoded->size()),
+            nullptr
+        ),
+        BN_free
+    );
+    BignumPtr exponent(
+        BN_bin2bn(
+            reinterpret_cast<const unsigned char*>(exponentDecoded->data()),
+            static_cast<int>(exponentDecoded->size()),
+            nullptr
+        ),
+        BN_free
+    );
+    if (!modulus || !exponent) {
+        return false;
+    }
+
+    ParamBldPtr paramBuilder(OSSL_PARAM_BLD_new());
+    if (!paramBuilder) {
+        return false;
+    }
+
+    if (OSSL_PARAM_BLD_push_BN(paramBuilder.get(), OSSL_PKEY_PARAM_RSA_N, modulus.get()) != 1) {
+        return false;
+    }
+    if (OSSL_PARAM_BLD_push_BN(paramBuilder.get(), OSSL_PKEY_PARAM_RSA_E, exponent.get()) != 1) {
+        return false;
+    }
+
+    ParamPtr params(OSSL_PARAM_BLD_to_param(paramBuilder.get()));
+    if (!params) {
+        return false;
+    }
+
+    PkeyCtxPtr keyCtx(EVP_PKEY_CTX_new_from_name(nullptr, "RSA", nullptr), EVP_PKEY_CTX_free);
+    if (!keyCtx) {
+        return false;
+    }
+
+    if (EVP_PKEY_fromdata_init(keyCtx.get()) != 1) {
+        return false;
+    }
+
+    EVP_PKEY*   rawKey    = nullptr;
+    OSSL_PARAM* rawParams = params.get();
+    if (EVP_PKEY_fromdata(keyCtx.get(), &rawKey, EVP_PKEY_PUBLIC_KEY, rawParams) != 1) {
+        return false;
+    }
+
+    PkeyPtr key(rawKey, EVP_PKEY_free);
+
+    if (!isRs256Key(key.get())) {
+        return false;
+    }
+
+    BioPtr publicBio(BIO_new(BIO_s_mem()), BIO_free);
+    if (!publicBio) {
+        return false;
+    }
+
+    if (PEM_write_bio_PUBKEY(publicBio.get(), key.get()) != 1) {
+        return false;
+    }
+
+    char* publicData = nullptr;
+    long  publicLen  = BIO_get_mem_data(publicBio.get(), &publicData);
+    if (publicLen <= 0 || !publicData) {
+        return false;
+    }
+
+    outPublicKeyPem.assign(publicData, static_cast<std::size_t>(publicLen));
+    return true;
+}
 
 [[nodiscard]] inline bool generateRS256KeyPair(std::string& outPublicKeyPem, std::string& outPrivateKeyPem) {
     outPublicKeyPem.clear();
