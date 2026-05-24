@@ -93,9 +93,7 @@ struct MojangPublicKeyFetchResult {
         std::string n{};
         std::string e{};
     };
-    struct {
-        std::vector<KeyInfo> keys{};
-    } result;
+    std::vector<KeyInfo> keys{};
 };
 
 Result<> AuthenticationKeyManager::initMojangPublicKeyBlocking(std::size_t timeoutSeconds) {
@@ -104,7 +102,7 @@ Result<> AuthenticationKeyManager::initMojangPublicKeyBlocking(std::size_t timeo
     mLegacyCertificateChainPublicKeyPems.emplace_back(MOJANG_PUBLIC_KEY_PEM);
 
     // https://client.discovery.minecraft-services.net/api/v1.0/discovery/MinecraftPE/builds/1.0.0.0
-    httplib::SSLClient serviceClient("client.discovery.minecraft-services.net");
+    httplib::Client serviceClient("https://client.discovery.minecraft-services.net");
     serviceClient.set_connection_timeout(timeoutSeconds);
     serviceClient.set_read_timeout(timeoutSeconds);
     serviceClient.set_write_timeout(timeoutSeconds);
@@ -123,7 +121,7 @@ Result<> AuthenticationKeyManager::initMojangPublicKeyBlocking(std::size_t timeo
     mLoginTokenExpectedIssuer = fetchResult.result.serviceEnvironments.auth.prod.issuer;
 
     //  {auth service base URL)/.well-known/keys
-    httplib::SSLClient keyClient(fetchResult.result.serviceEnvironments.auth.prod.serviceUri);
+    httplib::Client keyClient(fetchResult.result.serviceEnvironments.auth.prod.serviceUri);
     keyClient.set_connection_timeout(timeoutSeconds);
     keyClient.set_read_timeout(timeoutSeconds);
     keyClient.set_write_timeout(timeoutSeconds);
@@ -139,10 +137,10 @@ Result<> AuthenticationKeyManager::initMojangPublicKeyBlocking(std::size_t timeo
     if (!reflection::jsonc::deserialize(keyFetchResult, *keyJson)) {
         return error_utils::makeError("Failed to deserialize Mojang public key response JSON");
     }
-    if (keyFetchResult.result.keys.empty()) {
+    if (keyFetchResult.keys.empty()) {
         return error_utils::makeError("Mojang public key response JSON does not contain any keys");
     }
-    for (const auto& keyInfo : keyFetchResult.result.keys) {
+    for (const auto& keyInfo : keyFetchResult.keys) {
         if (keyInfo.kty == "RSA" && keyInfo.use == "sig") {
             std::string pem{};
             if (!rs256::jwkRsaPublicKeyToPem(keyInfo.n, keyInfo.e, pem)) {
